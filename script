@@ -1,0 +1,145 @@
+int photoresistorSensorPin = A4; // photo resistor is at sensor pin A4
+int potentiometerSensorPin = A5; //potentiometer is at sensor pin A5
+
+float solar_angle_offset = 0; // initializing variable for angle offset
+bool solar_angle_calibrated = false; // initializing calibration as false
+
+// initializing the following variables as 0 to be used later in the code:
+int maxValueLocation1 = 0;
+int maxValue1 = 0;
+int MaxValueAngle1 = 0;
+
+float Tolarance = 5; // tolerance parameter for final placement
+
+#include <AFMotor.h> //importing AFMotor.h library
+
+int steps_per_rev = 2048; // initializing the number of steps in each
+                          // revolution of stepper motor
+AF_Stepper stepMotor(steps_per_rev, 1); // declaring object stepMotor of
+                                        // type AF_Stepper
+AF_DCMotor DCmotor(4, MOTOR34_1KHZ); // declaring object DCmotor of
+                                     // type AF_DCMotor
+
+// the following function gets the current solar angle called get_solar_angle:
+float get_solar_angle() {
+
+  int N = analogRead(potentiometerSensorPin); // N is initialized as the
+                                              // value of the potentiometer
+  float Va = N / 1024.0 * 5;
+  
+  float phi = Va / 5 * 10 * 360; // phi is the offset determined by the
+                                 // potentiometer value
+
+  // solar_angle_calibrated was initialized as false, so the following
+  // conditional statement will run:
+  if (solar_angle_calibrated == false) {
+    solar_angle_offset = phi; // sets solar_angle_offset to above-
+                              // determined value
+    solar_angle_calibrated = true; // sets boolean variable to true,
+                                   // making the angle calibrated
+  }
+  return phi - solar_angle_offset; // function returns the angle minus
+                                   // the offset to calibrate
+}
+
+// function to retrieve the angle of the photoresistor which takes in
+// the value of steps as calculated by the photoresistor and returns 
+// the number of steps needed to get there:
+float get_photoresistor_angle(int steps) {
+  return steps * 360.0 / steps_per_rev;
+}
+
+void setup() {
+  
+  DCmotor.setSpeed(60); // sets DC motor speed
+  stepMotor.setSpeed(10); //sets step motor speed
+  Serial.begin(9600);
+  solar_angle_calibrated = false; // initializes truth value as false 
+ 
+ 
+  // loop to determine the location and value of the maximum light
+  // intensity that goes from 1 to 2048 because there are 2048 
+  // steps in one full revolution of the stepper motor:
+  for (int i = 0; i <= 2048; i++) {
+
+    // step motor moves forward one step
+    stepMotor.step(1, FORWARD, SINGLE);
+    
+    // if the photoresistor value at that point is larger than the 
+    // determined max value (which is initially set to 0), then the
+    // following loop runs:
+    if (analogRead(photoresistorSensorPin) > maxValue1) {
+
+      maxValue1 = analogRead(photoresistorSensorPin); // resets maxValue1
+                                                      // to current value
+      maxValueLocation1 = i; // takes down the location (from 1 to 2048)
+                             // where the max value is
+      MaxValueAngle1 = get_photoresistor_angle(i); // runs above function 
+                                                   // to determine steps
+      Serial.print("Found max angle at"); // prints location of max value
+      Serial.println(MaxValueAngle1);
+
+    }
+    delay(10); // delays 10 ms
+  }
+}
+
+void setup() {
+  DCmotor.setSpeed(60); // sets DC motor speed
+  stepMotor.setSpeed(10); //sets step motor speed
+  Serial.begin(9600);
+  solar_angle_calibrated = false; // initializes truth value as false 
+  // loop to determine the location and value of the maximum light
+  // intensity that goes from 1 to 2048 because there are 2048 
+  // steps in one full revolution of the stepper motor:
+  for (int i = 0; i <= 2048; i++) {
+    // step motor moves forward one step
+    stepMotor.step(1, FORWARD, SINGLE);
+    // if the photoresistor value at that point is larger than the 
+    // determined max value (which is initially set to 0), then the
+    // following loop runs:
+    if (analogRead(photoresistorSensorPin) > maxValue1) {
+      maxValue1 = analogRead(photoresistorSensorPin); // resets maxValue1
+                                                      // to current value
+      maxValueLocation1 = i; // takes down the location (from 1 to 2048)
+                             // where the max value is
+      MaxValueAngle1 = get_photoresistor_angle(i); // runs above function 
+                                                   // to determine steps
+      Serial.print("Found max angle at"); // prints location of max value
+      Serial.println(MaxValueAngle1);
+     }
+    delay(10); // delays 10 ms
+  }
+}
+// loop to move the solar panel to the determined direction
+
+
+void loop() {
+  bool hasArrived = false; // initializing hasArrived variable as false
+  // while hasArrived variable is not true, do the following loop:
+  while (!hasArrived) {
+    float phi_DC = get_solar_angle(); // runs above function to get
+                                      // angle for DC motor
+    // if the angle for the DC motor is larger than the determined
+    // angle where the max light sensitivity is plus the tolerance, 
+    // move the motor forward
+    if (phi_DC > (MaxValueAngle1 + Tolarance)) {
+      DCmotor.run(FORWARD);
+    }
+    // otherwise, if the angle for the DC motor is less than the
+    // determined angle where the max light sensitivity is minus 
+    // the tolerance, move the motor backward
+    else if (phi_DC < (MaxValueAngle1 - Tolarance)) {
+      DCmotor.run(BACKWARD);
+    }
+    // if the motor does not move either way, release it because 
+    // it has arrived at the correct location
+    else {
+      DCmotor.run(RELEASE);
+      hasArrived = true; // set boolean hasArrived to true so the 
+                         // while loop stops running
+      Serial.println("has arrived"); //print that it has arrived
+    }
+    delay(50); // delay 50ms
+  }
+}
